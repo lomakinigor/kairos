@@ -70,6 +70,7 @@ body {
 
 #widget {
   display: flex;
+  position: relative;
   gap: 6px;
   padding: 10px 10px 8px;
   background: rgba(13, 13, 22, 0.90);
@@ -86,6 +87,18 @@ body {
   box-shadow:
     0 0 20px rgba(255, 150, 30, 0.30),
     0 0 50px rgba(255, 110, 0, 0.12);
+}
+
+#brand {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  font: italic 10px 'Georgia', 'Times New Roman', serif;
+  color: rgba(255, 255, 255, 0.38);
+  letter-spacing: 0.05em;
+  pointer-events: none;
+  white-space: nowrap;
 }
 
 .dial-wrap {

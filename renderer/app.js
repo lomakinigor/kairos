@@ -177,13 +177,6 @@ function drawClock(ctx, size) {
 
   drawFace(ctx, cx, cy, r, isBreak);
 
-  // Brand name — italic serif at 6 o'clock, like a vintage watch
-  ctx.font = `italic ${Math.round(size * 0.09)}px 'Georgia','Times New Roman',serif`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillStyle = isBreak ? 'rgba(255,210,100,0.28)' : 'rgba(255,255,255,0.22)';
-  ctx.fillText('Kairos', cx, cy + r * 0.52);
-
   const now = new Date();
   const h = now.getHours() % 12 + now.getMinutes() / 60 + now.getSeconds() / 3600;
   const m = now.getMinutes() + now.getSeconds() / 60;

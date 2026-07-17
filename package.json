@@ -10,7 +10,9 @@
   "build": {
     "appId": "com.kairos.widget",
     "productName": "Kairos",
-    "directories": { "output": "dist" },
+    "directories": {
+      "output": "dist"
+    },
     "win": {
       "target": "nsis",
       "icon": "assets/icon.ico"
@@ -30,6 +32,7 @@
   },
   "devDependencies": {
     "electron": "^28.0.0",
-    "electron-builder": "^24.0.0"
+    "electron-builder": "^24.0.0",
+    "png-to-ico": "^3.0.2"
   }
 }

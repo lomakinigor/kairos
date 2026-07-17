@@ -11,8 +11,8 @@ function remindersFile() { return path.join(getDataDir(), 'reminders.json'); }
 function winPosFile()    { return path.join(getDataDir(), 'window-pos.json'); }
 
 const DEFAULT_REMINDERS = [
-  { id: 1, type: 'time',     time: '15:00',        message: 'Лучшее время для пробежки! 🏃', enabled: true },
-  { id: 2, type: 'interval', intervalMinutes: 60,  message: '💧 3 глотка воды',              enabled: true },
+  { id: 1,              type: 'time',     time: '15:00',       message: 'Лучшее время для пробежки! 🏃', enabled: true },
+  { id: 2,              type: 'interval', intervalMinutes: 60, message: 'Три глотка воды',               enabled: true },
 ];
 
 function loadJSON(file, fallback) {
