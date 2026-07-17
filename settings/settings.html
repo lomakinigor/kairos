@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Kairos — Напоминания</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', -apple-system, sans-serif;
+      background: #0e0e1a;
+      color: #dde0f0;
+      padding: 24px 20px;
+    }
+    h2 {
+      font-size: 15px;
+      font-weight: 500;
+      color: #fff;
+      margin-bottom: 6px;
+    }
+    .note {
+      font-size: 11px;
+      color: rgba(255,255,255,0.35);
+      margin-bottom: 20px;
+      line-height: 1.5;
+    }
+    .list { margin-bottom: 20px; }
+    .item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 10px;
+      margin-bottom: 8px;
+    }
+    .item input[type="checkbox"] {
+      width: 15px; height: 15px;
+      accent-color: #ffa030;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .item .time {
+      font-family: 'Consolas', monospace;
+      font-size: 13px;
+      color: #ffa030;
+      min-width: 42px;
+    }
+    .item .msg {
+      flex: 1;
+      font-size: 13px;
+      color: rgba(255,255,255,0.85);
+    }
+    .item .del {
+      background: none;
+      border: none;
+      color: rgba(255,80,80,0.5);
+      cursor: pointer;
+      font-size: 14px;
+      padding: 0 2px;
+      line-height: 1;
+      transition: color 0.15s;
+    }
+    .item .del:hover { color: rgba(255,80,80,1); }
+
+    .add-box {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 20px;
+    }
+    .add-box h3 {
+      font-size: 12px;
+      font-weight: 400;
+      color: rgba(255,255,255,0.45);
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    input[type="time"],
+    input[type="text"] {
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 7px;
+      color: #dde0f0;
+      padding: 7px 10px;
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    input[type="time"]:focus,
+    input[type="text"]:focus { border-color: rgba(255,160,48,0.5); }
+    input[type="time"] { width: 105px; }
+    input[type="text"] { flex: 1; }
+    input[type="text"]::placeholder { color: rgba(255,255,255,0.25); }
+    .btn-add {
+      background: rgba(255,160,48,0.12);
+      border: 1px solid rgba(255,160,48,0.35);
+      border-radius: 7px;
+      color: #ffa030;
+      padding: 7px 16px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-add:hover { background: rgba(255,160,48,0.22); }
+    .footer { display: flex; justify-content: flex-end; }
+    .btn-save {
+      background: rgba(255,160,48,0.18);
+      border: 1px solid rgba(255,160,48,0.45);
+      border-radius: 9px;
+      color: #ffa030;
+      padding: 9px 28px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-save:hover { background: rgba(255,160,48,0.30); }
+    .empty {
+      font-size: 12px;
+      color: rgba(255,255,255,0.25);
+      text-align: center;
+      padding: 14px;
+    }
+    .interval-lbl {
+      font-family: 'Consolas', monospace;
+      font-size: 13px;
+      color: #60c8ff;
+      min-width: 42px;
+    }
+    .type-toggle {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 14px;
+    }
+    .type-btn {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 7px;
+      color: rgba(255,255,255,0.45);
+      padding: 5px 14px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .type-btn.active {
+      background: rgba(255,160,48,0.14);
+      border-color: rgba(255,160,48,0.40);
+      color: #ffa030;
+    }
+    input[type="number"], select {
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 7px;
+      color: #dde0f0;
+      padding: 7px 10px;
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    input[type="number"] { width: 72px; }
+    select { width: 90px; cursor: pointer; }
+    input[type="number"]:focus, select:focus { border-color: rgba(96,200,255,0.5); }
+    .next-time {
+      font-size: 10px;
+      color: rgba(96, 200, 255, 0.50);
+      letter-spacing: 0.02em;
+    }
+    .once-badge {
+      font-size: 10px;
+      color: rgba(180, 255, 160, 0.55);
+      letter-spacing: 0.02em;
+    }
+    .fired-badge {
+      font-size: 10px;
+      color: rgba(255, 255, 255, 0.25);
+      letter-spacing: 0.02em;
+    }
+    .item.fired { opacity: 0.45; }
+    .author-line {
+      text-align: center;
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.18);
+      margin-top: 14px;
+      letter-spacing: 0.03em;
+    }
+  </style>
+</head>
+<body>
+  <h2>Напоминания</h2>
+  <p class="note">
+    Напоминания <span style="color:#ffa030">по времени</span> срабатывают в заданный час каждый день.<br>
+    Напоминания <span style="color:#60c8ff">по интервалу</span> — каждые N минут/часов с момента запуска.
+  </p>
+
+  <div class="list" id="list"></div>
+
+  <div class="add-box">
+    <h3>Добавить напоминание</h3>
+    <div class="type-toggle">
+      <button class="type-btn" data-type="time"     onclick="setAddType('time')">По времени</button>
+      <button class="type-btn" data-type="interval" onclick="setAddType('interval')">По интервалу</button>
+      <button class="type-btn" data-type="once"     onclick="setAddType('once')">Разовое</button>
+    </div>
+
+    <div id="timeFields">
+      <div class="row">
+        <input type="time" id="newTime" value="15:00">
+        <input type="text" id="newMsg" placeholder="Текст напоминания…">
+      </div>
+    </div>
+
+    <div id="intervalFields" style="display:none">
+      <div class="row">
+        <input type="number" id="newIntervalH" min="0" max="23" value="1" style="width:56px">
+        <span style="color:rgba(255,255,255,0.4);font-size:12px">ч</span>
+        <input type="number" id="newIntervalM" min="0" max="59" value="0" style="width:56px">
+        <span style="color:rgba(255,255,255,0.4);font-size:12px">мин</span>
+        <input type="text" id="newMsgInterval" placeholder="Текст напоминания…">
+      </div>
+    </div>
+
+    <button class="btn-add" onclick="addItem()">+ Добавить</button>
+  </div>
+
+  <div class="footer">
+    <button class="btn-save" onclick="save()">Сохранить</button>
+  </div>
+  <div class="author-line" id="authorLine"></div>
+
+  <script src="settings.js"></script>
+</body>
+</html>
