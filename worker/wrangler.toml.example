@@ -1,4 +1,5 @@
 name = "kairos-ai"
+account_id = "REPLACE_WITH_ACCOUNT_ID"
 main = "worker.mjs"
 compatibility_date = "2026-08-03"
 
@@ -12,6 +13,12 @@ OPENAI_MODEL = "gpt-5.4-nano"
 binding = "QUOTA"
 id = "REPLACE_WITH_KV_NAMESPACE_ID"
 
+[[d1_databases]]
+binding = "DB"
+database_name = "kairos-installations"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+
 # Secrets are configured outside git:
 # npx wrangler secret put OPENAI_API_KEY
 # npx wrangler secret put OWNER_TOKEN
+# npx wrangler secret put TELEMETRY_SALT

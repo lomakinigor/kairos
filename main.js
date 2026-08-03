@@ -6,7 +6,7 @@ const crypto = require('crypto');
 const { execFile } = require('child_process');
 const { shouldShowReleaseNotes, isLegacyKairosElectronEntry } = require('./lib/update-policy');
 
-const DEFAULT_ASSISTANT_API_URL = 'https://kairos-ai.kairos-17184.workers.dev';
+const DEFAULT_ASSISTANT_API_URL = 'https://kairos-ai.kairos-stats-17184.workers.dev';
 
 // Per-reminder runtime state: { [id]: { lastFiredAt, lastFiredDay } }
 const reminderState = {};
@@ -82,6 +82,7 @@ let mainWindow = null;
 let settingsWindow = null;
 let assistantWindow = null;
 let updatesWindow = null;
+let statsWindow = null;
 let downloadedUpdate = null;
 let currentCanvasSize = 120;
 let _resizeGuard = false;
@@ -199,7 +200,24 @@ function openUpdatesWindow(mode = 'whats-new', updateInfo = null) {
 
 function maybeShowReleaseNotes() {
   const state = loadJSON(updateStateFile(), {});
-  if (shouldShowReleaseNotes(app.getVersion(), state.lastSeenVersion)) openUpdatesWindow('whats-new');
+  if (!shouldShowReleaseNotes(app.getVersion(), state.lastSeenVersion)) return;
+  if (getReleaseNotes().silent) {
+    saveJSON(updateStateFile(), { lastSeenVersion: app.getVersion() });
+    return;
+  }
+  openUpdatesWindow('whats-new');
+}
+
+async function sendInstallationTelemetry() {
+  const config = getAssistantConfig();
+  try {
+    await fetch(`${config.apiUrl.replace(/\/$/, '')}/v1/telemetry`, {
+      method: 'POST',
+      signal: AbortSignal.timeout(5000),
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ installationId: config.installationId, version: app.getVersion() }),
+    });
+  } catch (_) {}
 }
 
 function cleanupLegacyElectronAutostart() {
@@ -262,6 +280,25 @@ function openAssistant() {
   assistantWindow.on('closed', () => { assistantWindow = null; });
 }
 
+function openStatsWindow() {
+  const config = getAssistantConfig();
+  if (!config.ownerToken) return;
+  if (statsWindow) { statsWindow.focus(); return; }
+  statsWindow = new BrowserWindow({
+    width: 560,
+    height: 610,
+    minWidth: 560,
+    minHeight: 610,
+    title: 'Kairos — Статистика установок',
+    resizable: false,
+    backgroundColor: '#0e0e1a',
+    webPreferences: { nodeIntegration: true, contextIsolation: false },
+  });
+  statsWindow.menuBarVisible = false;
+  statsWindow.loadFile(path.join(__dirname, 'stats', 'stats.html'));
+  statsWindow.on('closed', () => { statsWindow = null; });
+}
+
 app.setAppUserModelId('com.kairos.widget');
 cleanupLegacyElectronAutostart();
 if (app.isPackaged) {
@@ -283,6 +320,7 @@ if (!gotLock) {
     setInterval(checkRemindersMain, 20000);
     configureUpdater();
     setTimeout(maybeShowReleaseNotes, 1200);
+    setTimeout(sendInstallationTelemetry, 5000);
   });
 
   app.on('window-all-closed', () => {
@@ -335,9 +373,11 @@ ipcMain.on('resize-window', (_, { canvasSize }) => {
 });
 
 ipcMain.on('show-context-menu', (event) => {
+  const config = getAssistantConfig();
   const menu = Menu.buildFromTemplate([
     { label: 'Переводчик и IT-помощник', click: openAssistant },
     { label: 'Настройки напоминаний', click: openSettings },
+    ...(config.ownerToken ? [{ label: 'Статистика установок', click: openStatsWindow }] : []),
     { type: 'separator' },
     { label: 'Выйти', click: () => app.quit() },
   ]);
@@ -345,6 +385,23 @@ ipcMain.on('show-context-menu', (event) => {
 });
 
 ipcMain.on('get-app-version', (event) => { event.returnValue = app.getVersion(); });
+
+ipcMain.on('stats-request', async event => {
+  const config = getAssistantConfig();
+  if (!config.ownerToken) return;
+  try {
+    const response = await fetch(`${config.apiUrl.replace(/\/$/, '')}/v1/stats`, {
+      signal: AbortSignal.timeout(10000),
+      headers: { 'x-kairos-owner': config.ownerToken },
+    });
+    const payload = await response.json().catch(() => ({}));
+    event.sender.send('stats-response', response.ok
+      ? { ok: true, stats: payload }
+      : { ok: false, message: 'Не удалось загрузить статистику' });
+  } catch (_) {
+    event.sender.send('stats-response', { ok: false, message: 'Нет соединения со статистикой' });
+  }
+});
 
 ipcMain.on('updates-action', (_, action) => {
   if (action === 'install' && downloadedUpdate) {

@@ -51,7 +51,17 @@ $save.Add_Click({
   New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
   $secure = ConvertTo-SecureString $tokenBox.Text -AsPlainText -Force
   $secure | ConvertFrom-SecureString | Set-Content -Encoding UTF8 -LiteralPath $targetFile
+  if (-not (Test-Path -LiteralPath $targetFile)) {
+    $status.Text = 'Save failed. Please try again.'
+    return
+  }
   $tokenBox.Text = ''
+  [System.Windows.Forms.MessageBox]::Show(
+    "Token saved securely to:`n$targetFile",
+    'Kairos',
+    [System.Windows.Forms.MessageBoxButtons]::OK,
+    [System.Windows.Forms.MessageBoxIcon]::Information
+  ) | Out-Null
   $form.DialogResult = [System.Windows.Forms.DialogResult]::OK
   $form.Close()
 })

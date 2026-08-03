@@ -5,7 +5,7 @@ const JSON_HEADERS = {
   'content-type': 'application/json; charset=utf-8',
   'access-control-allow-origin': '*',
   'access-control-allow-headers': 'content-type,x-kairos-owner',
-  'access-control-allow-methods': 'POST,OPTIONS',
+  'access-control-allow-methods': 'GET,POST,OPTIONS',
 };
 
 function json(data, status = 200, extraHeaders = {}) {
@@ -27,6 +27,15 @@ function validateBody(body) {
     throw new Error('Не удалось определить установку приложения');
   }
   return { mode: body.mode, text, installationId };
+}
+
+function validateTelemetry(body) {
+  const installationId = typeof body?.installationId === 'string' ? body.installationId.trim() : '';
+  const version = typeof body?.version === 'string' ? body.version.trim() : '';
+  if (!/^[A-Za-z0-9-]{8,128}$/.test(installationId) || !/^\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?$/.test(version)) {
+    throw new Error('Некорректные данные установки');
+  }
+  return { installationId, version };
 }
 
 function promptFor(mode, text) {
@@ -75,6 +84,55 @@ function readOutput(payload) {
 async function handleRequest(request, env) {
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: JSON_HEADERS });
   const url = new URL(request.url);
+  const suppliedOwnerToken = request.headers.get('x-kairos-owner') || '';
+  const isOwner = Boolean(env.OWNER_TOKEN) && suppliedOwnerToken === env.OWNER_TOKEN;
+
+  if (request.method === 'POST' && url.pathname === '/v1/telemetry') {
+    if (!env.DB || !env.TELEMETRY_SALT) return new Response(null, { status: 204, headers: JSON_HEADERS });
+    let telemetry;
+    try {
+      telemetry = validateTelemetry(await request.json());
+    } catch (error) {
+      return json({ error: 'invalid_request', message: error.message }, 400);
+    }
+    const installationHash = await sha256(`${env.TELEMETRY_SALT}:${telemetry.installationId}`);
+    await env.DB.prepare(`
+      INSERT INTO installations (installation_hash, first_seen, last_seen, first_version, current_version)
+      VALUES (?1, datetime('now'), datetime('now'), ?2, ?2)
+      ON CONFLICT(installation_hash) DO UPDATE SET
+        last_seen = datetime('now'),
+        current_version = excluded.current_version
+    `).bind(installationHash, telemetry.version).run();
+    return new Response(null, { status: 204, headers: JSON_HEADERS });
+  }
+
+  if (request.method === 'GET' && url.pathname === '/v1/stats') {
+    if (!isOwner || !env.DB) return json({ error: 'not_found', message: 'Маршрут не найден' }, 404);
+    const totals = await env.DB.prepare(`
+      SELECT
+        COUNT(*) AS total,
+        SUM(CASE WHEN first_seen >= datetime('now', 'start of day') THEN 1 ELSE 0 END) AS newToday,
+        SUM(CASE WHEN first_seen >= datetime('now', '-7 days') THEN 1 ELSE 0 END) AS new7Days,
+        SUM(CASE WHEN first_seen >= datetime('now', '-30 days') THEN 1 ELSE 0 END) AS new30Days,
+        SUM(CASE WHEN last_seen >= datetime('now', '-30 days') THEN 1 ELSE 0 END) AS active30Days
+      FROM installations
+    `).first();
+    const versions = await env.DB.prepare(`
+      SELECT current_version AS version, COUNT(*) AS count
+      FROM installations
+      GROUP BY current_version
+      ORDER BY count DESC, current_version DESC
+    `).all();
+    return json({
+      total: Number(totals?.total || 0),
+      newToday: Number(totals?.newToday || 0),
+      new7Days: Number(totals?.new7Days || 0),
+      new30Days: Number(totals?.new30Days || 0),
+      active30Days: Number(totals?.active30Days || 0),
+      versions: (versions.results || []).map(row => ({ version: row.version, count: Number(row.count) })),
+    });
+  }
+
   if (request.method !== 'POST' || url.pathname !== '/v1/assistant') {
     return json({ error: 'not_found', message: 'Маршрут не найден' }, 404);
   }
@@ -89,8 +147,6 @@ async function handleRequest(request, env) {
     return json({ error: 'invalid_request', message: error.message || 'Некорректный запрос' }, 400);
   }
 
-  const suppliedOwnerToken = request.headers.get('x-kairos-owner') || '';
-  const isOwner = Boolean(env.OWNER_TOKEN) && suppliedOwnerToken === env.OWNER_TOKEN;
   const dateKey = new Date().toISOString().slice(0, 10);
   const ip = request.headers.get('cf-connecting-ip') || 'unknown';
   const identity = await sha256(`${input.installationId}:${ip}`);
@@ -153,5 +209,5 @@ async function handleRequest(request, env) {
   });
 }
 
-export { DAILY_LIMIT, handleRequest, promptFor, readOutput, validateBody };
+export { DAILY_LIMIT, handleRequest, promptFor, readOutput, validateBody, validateTelemetry };
 export default { fetch: handleRequest };

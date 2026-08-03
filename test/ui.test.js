@@ -28,3 +28,20 @@ test('API secrets are not present in renderer files', () => {
     assert.doesNotMatch(content, /OPENAI_API_KEY|sk-[A-Za-z0-9_-]{20,}/);
   }
 });
+
+test('owner installation has a private installation statistics window', () => {
+  const html = fs.readFileSync(path.join(root, 'stats', 'stats.html'), 'utf8');
+  const main = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
+  assert.match(html, /id="total"/);
+  assert.match(html, /id="versions"/);
+  assert.match(main, /function openStatsWindow\(\)/);
+  assert.match(main, /ownerToken[^\n]+Статистика установок/);
+  assert.match(main, /\/v1\/stats/);
+});
+
+test('desktop telemetry is delayed and does not block app startup', () => {
+  const main = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
+  assert.match(main, /setTimeout\(sendInstallationTelemetry, 5000\)/);
+  assert.match(main, /\/v1\/telemetry/);
+  assert.match(main, /app\.getVersion\(\)/);
+});

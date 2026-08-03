@@ -9,11 +9,46 @@ class FakeKV {
   async put(key, value) { this.values.set(key, Number(value)); }
 }
 
+class FakeD1 {
+  constructor() { this.installations = new Map(); }
+  prepare(sql) {
+    return {
+      bind: (...values) => ({
+        run: async () => {
+          const [hash, version] = values;
+          const existing = this.installations.get(hash);
+          this.installations.set(hash, existing
+            ? { ...existing, current_version: version, last_seen: new Date().toISOString() }
+            : { installation_hash: hash, first_version: version, current_version: version, first_seen: new Date().toISOString(), last_seen: new Date().toISOString() });
+          return { success: true };
+        },
+      }),
+      first: async () => {
+        const rows = [...this.installations.values()];
+        return { total: rows.length, newToday: rows.length, new7Days: rows.length, new30Days: rows.length, active30Days: rows.length };
+      },
+      all: async () => {
+        const counts = new Map();
+        for (const row of this.installations.values()) counts.set(row.current_version, (counts.get(row.current_version) || 0) + 1);
+        return { results: [...counts].map(([version, count]) => ({ version, count })) };
+      },
+    };
+  }
+}
+
 function request(body, headers = {}) {
   return new Request('https://kairos.example/v1/assistant', {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'cf-connecting-ip': '127.0.0.1', ...headers },
     body: JSON.stringify(body),
+  });
+}
+
+function apiRequest(path, { method = 'GET', body, headers = {} } = {}) {
+  return new Request(`https://kairos.example${path}`, {
+    method,
+    headers: { 'content-type': 'application/json', ...headers },
+    body: body ? JSON.stringify(body) : undefined,
   });
 }
 
@@ -23,6 +58,8 @@ function env(overrides = {}) {
     OWNER_TOKEN: 'owner-secret',
     OPENAI_MODEL: 'gpt-5.4-nano',
     QUOTA: new FakeKV(),
+    DB: new FakeD1(),
+    TELEMETRY_SALT: 'telemetry-test-salt',
     OPENAI_FETCH: async () => new Response(JSON.stringify({
       choices: [{ message: { content: 'Готовый ответ' } }],
     }), {
@@ -40,6 +77,35 @@ test('returns provider result and decrements external quota', async () => {
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), {
     result: 'Готовый ответ', remaining: 4, unlimited: false,
+  });
+});
+
+test('records one unique installation and updates its version without incrementing total', async () => {
+  const testEnv = env();
+  for (const version of ['1.2.0', '1.2.1']) {
+    const response = await handleRequest(apiRequest('/v1/telemetry', {
+      method: 'POST', body: { installationId: 'install-unique', version },
+    }), testEnv);
+    assert.equal(response.status, 204);
+  }
+  assert.equal(testEnv.DB.installations.size, 1);
+  assert.equal([...testEnv.DB.installations.values()][0].current_version, '1.2.1');
+});
+
+test('returns aggregate installation stats only to the owner', async () => {
+  const testEnv = env();
+  await handleRequest(apiRequest('/v1/telemetry', {
+    method: 'POST', body: { installationId: 'install-stats', version: '1.2.0' },
+  }), testEnv);
+  const hidden = await handleRequest(apiRequest('/v1/stats'), testEnv);
+  assert.equal(hidden.status, 404);
+  const response = await handleRequest(apiRequest('/v1/stats', {
+    headers: { 'x-kairos-owner': 'owner-secret' },
+  }), testEnv);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    total: 1, newToday: 1, new7Days: 1, new30Days: 1, active30Days: 1,
+    versions: [{ version: '1.2.0', count: 1 }],
   });
 });
 
