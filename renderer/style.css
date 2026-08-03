@@ -1,3 +1,4 @@
+:root { --widget-scale: 1; }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
@@ -31,14 +32,14 @@ body {
 .notif-content {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 9px 12px 8px;
+  gap: calc(8px * var(--widget-scale));
+  padding: calc(9px * var(--widget-scale)) calc(12px * var(--widget-scale)) calc(8px * var(--widget-scale));
 }
 
 .notif-msg {
   flex: 1;
   font-family: 'Segoe UI', -apple-system, sans-serif;
-  font-size: 12px;
+  font-size: calc(12px * var(--widget-scale));
   color: rgba(255, 220, 155, 0.92);
   line-height: 1.35;
   word-break: break-word;
@@ -50,7 +51,7 @@ body {
   border: none;
   color: rgba(255, 255, 255, 0.28);
   cursor: pointer;
-  font-size: 12px;
+  font-size: calc(12px * var(--widget-scale));
   padding: 0;
   line-height: 1;
   flex-shrink: 0;
@@ -94,7 +95,7 @@ body {
   top: 6px;
   left: 50%;
   transform: translateX(-50%);
-  font: italic 10px 'Georgia', 'Times New Roman', serif;
+  font: italic calc(10px * var(--widget-scale)) 'Georgia', 'Times New Roman', serif;
   color: rgba(255, 255, 255, 0.38);
   letter-spacing: 0.05em;
   pointer-events: none;
@@ -110,7 +111,7 @@ body {
 
 .dial-label {
   font-family: -apple-system, 'Segoe UI', sans-serif;
-  font-size: 9px;
+  font-size: calc(9px * var(--widget-scale));
   color: rgba(255, 255, 255, 0.28);
   text-transform: uppercase;
   letter-spacing: 0.08em;

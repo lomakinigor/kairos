@@ -1,4 +1,5 @@
 const { ipcRenderer } = require('electron');
+const { getTextScale } = require('../lib/update-policy');
 
 // === Constants ===
 const WORK_SECS  = 45 * 60;
@@ -14,13 +15,13 @@ let canvasSize  = 120;
 let mouseIgnored = true; // tracks current setIgnoreMouseEvents state
 
 // === DOM ===
-const clockCtx  = document.getElementById('clockCanvas').getContext('2d');
-const timerCtx  = document.getElementById('timerCanvas').getContext('2d');
-const widget    = document.getElementById('widget');
-const modeLabel = document.getElementById('modeLabel');
+const clockCtx      = document.getElementById('clockCanvas').getContext('2d');
+const timerCtx      = document.getElementById('timerCanvas').getContext('2d');
+const widget        = document.getElementById('widget');
+const modeLabel     = document.getElementById('modeLabel');
+const notifContainer = document.getElementById('notif-container');
 
 // === Notification panels ===
-const NOTIF_EXTRA = 44;
 let _notifId = 0;
 const _notifTimers = {};
 
@@ -64,7 +65,6 @@ function showNotif(message) {
   }));
 
   _notifTimers[id] = setTimeout(() => hideNotif(id), 180000);
-  _updateNotifHeight();
 }
 
 function hideNotif(id) {
@@ -72,12 +72,6 @@ function hideNotif(id) {
   delete _notifTimers[id];
   const el = document.getElementById('np-' + id);
   if (el) el.remove();
-  _updateNotifHeight();
-}
-
-function _updateNotifHeight() {
-  const count = document.getElementById('notif-container').children.length;
-  ipcRenderer.send('set-window-height-extra', count * NOTIF_EXTRA);
 }
 
 // === Audio ===
@@ -88,8 +82,12 @@ function getAudio() {
   return audioCtx;
 }
 
-function playChime(type) {
+async function playChime(type) {
   const ctx = getAudio();
+  if (ctx.state === 'suspended') {
+    try { await ctx.resume(); } catch (_) {}
+  }
+  if (ctx.state !== 'running') return;
   const t = ctx.currentTime;
   const tones = type === 'break'
     ? [{ f: 880, t: t,        d: 1.4 }, { f: 660, t: t + 0.45, d: 1.4 }]
@@ -111,10 +109,15 @@ function playChime(type) {
 
 // === Resize ===
 function resizeCanvases(size) {
+  document.documentElement.style.setProperty('--widget-scale', getTextScale(size));
   clockCtx.canvas.width  = size;
   clockCtx.canvas.height = size;
   timerCtx.canvas.width  = size;
   timerCtx.canvas.height = size;
+  // Pin notification container width so viewport changes don't stretch panels.
+  const w = size * 2 + 34;
+  notifContainer.style.width    = w + 'px';
+  notifContainer.style.maxWidth = w + 'px';
 }
 
 // === Drawing helpers ===
@@ -316,7 +319,7 @@ document.addEventListener('mouseup', () => { dragging = false; });
 document.addEventListener('wheel', e => {
   e.preventDefault();
   const step = e.deltaY > 0 ? -6 : 6;
-  canvasSize = Math.max(80, Math.min(260, canvasSize + step));
+  canvasSize = Math.max(50, Math.min(260, canvasSize + step));
   resizeCanvases(canvasSize);
   ipcRenderer.send('resize-window', { canvasSize });
 }, { passive: false });

@@ -1,11 +1,12 @@
 {
   "name": "kairos",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Desktop clock widget — local time + 45-min work/break timer",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder --win --x64"
+    "build": "electron-builder --win --x64",
+    "test": "node --test test/*.test.js test/*.test.mjs"
   },
   "build": {
     "appId": "com.kairos.widget",
@@ -15,11 +16,15 @@
     },
     "win": {
       "target": "nsis",
-      "icon": "assets/icon.ico"
+      "icon": "assets/icon.ico",
+      "artifactName": "${productName}-Setup-${version}.${ext}"
     },
     "nsis": {
       "oneClick": true,
-      "perMachine": false
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "runAfterFinish": true
     },
     "publish": {
       "provider": "github",

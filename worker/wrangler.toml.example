@@ -1,0 +1,17 @@
+name = "kairos-ai"
+main = "worker.mjs"
+compatibility_date = "2026-08-03"
+
+[placement]
+region = "aws:us-east-1"
+
+[vars]
+OPENAI_MODEL = "gpt-5.4-nano"
+
+[[kv_namespaces]]
+binding = "QUOTA"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+
+# Secrets are configured outside git:
+# npx wrangler secret put OPENAI_API_KEY
+# npx wrangler secret put OWNER_TOKEN

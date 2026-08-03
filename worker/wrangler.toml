@@ -1,0 +1,15 @@
+name = "kairos-ai"
+main = "worker.mjs"
+compatibility_date = "2026-08-03"
+workers_dev = true
+preview_urls = false
+
+[placement]
+region = "aws:us-east-1"
+
+[vars]
+OPENAI_MODEL = "gpt-5.4-nano"
+
+[[kv_namespaces]]
+binding = "QUOTA"
+id = "4f2d0f00540c4a2faa7793d41b38c1e0"

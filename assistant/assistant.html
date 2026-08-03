@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kairos Assistant</title>
+  <link rel="stylesheet" href="assistant.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">KAIROS</p>
+        <h1>Переводчик и IT-помощник</h1>
+      </div>
+      <div class="quota" id="quota" aria-live="polite">5 запросов</div>
+    </header>
+
+    <div class="tabs" role="tablist" aria-label="Режим помощника">
+      <button class="tab active" id="translateTab" role="tab" aria-selected="true" data-mode="translate">Перевод</button>
+      <button class="tab" id="termTab" role="tab" aria-selected="false" data-mode="term">IT-термин</button>
+    </div>
+
+    <section class="workspace" aria-labelledby="inputLabel">
+      <div class="field-head">
+        <label id="inputLabel" for="inputText">Текст для перевода</label>
+        <span id="counter">0 / 4000</span>
+      </div>
+      <textarea id="inputText" maxlength="4000" placeholder="Введите фразу на русском или английском…" autofocus></textarea>
+      <div class="meta-row">
+        <span class="direction" id="direction">Язык определится автоматически</span>
+        <span class="shortcut">Ctrl + Enter</span>
+      </div>
+      <button class="primary" id="submitButton">Перевести</button>
+      <p class="status" id="status" aria-live="polite"></p>
+    </section>
+
+    <section class="result-card" id="resultCard" hidden aria-live="polite">
+      <div class="result-head">
+        <h2 id="resultTitle">Результат перевода</h2>
+        <button class="copy" id="copyButton">Копировать</button>
+      </div>
+      <div class="result" id="result"></div>
+    </section>
+
+    <p class="privacy">Текст передаётся OpenAI для обработки. Не вводите пароли и конфиденциальные данные.</p>
+  </main>
+  <script src="assistant.js"></script>
+</body>
+</html>

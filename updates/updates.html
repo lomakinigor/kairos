@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kairos — Что нового</title>
+  <link rel="stylesheet" href="updates.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="hero reveal">
+      <p class="eyebrow" id="eyebrow">ОБНОВЛЕНИЕ</p>
+      <div class="version" id="version">1.1.0</div>
+      <h1 id="title">Kairos стал полезнее</h1>
+      <p class="subtitle" id="subtitle">Новые возможности уже готовы — настройки и напоминания остались на месте.</p>
+    </header>
+    <section class="changes reveal delay-1" aria-labelledby="changes-title">
+      <h2 id="changes-title">Что изменилось</h2>
+      <ul id="items"></ul>
+    </section>
+    <aside class="limit reveal delay-2" id="limit" aria-label="Ограничение запросов"></aside>
+    <footer class="actions reveal delay-3">
+      <button class="secondary" id="later" hidden>Позже</button>
+      <button class="primary" id="primary">Понятно</button>
+    </footer>
+  </main>
+  <script src="updates.js"></script>
+</body>
+</html>
