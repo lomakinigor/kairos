@@ -5,6 +5,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const { execFile } = require('child_process');
 const { shouldShowReleaseNotes, isLegacyKairosElectronEntry } = require('./lib/update-policy');
+const { dueReminderDays, reminderKey } = require('./lib/subscriptions');
 
 const DEFAULT_ASSISTANT_API_URL = 'https://kairos-ai.kairos-stats-17184.workers.dev';
 
@@ -13,6 +14,7 @@ const reminderState = {};
 
 function getDataDir() { return app.getPath('userData'); }
 function remindersFile() { return path.join(getDataDir(), 'reminders.json'); }
+function subscriptionsFile() { return path.join(getDataDir(), 'subscriptions.json'); }
 function winPosFile()    { return path.join(getDataDir(), 'window-pos.json'); }
 function installationIdFile() { return path.join(getDataDir(), 'installation-id.txt'); }
 function ownerTokenFile() { return path.join(getDataDir(), 'owner-token.txt'); }
@@ -23,6 +25,8 @@ const DEFAULT_REMINDERS = [
   { id: 1,              type: 'time',     time: '15:00',       message: 'Лучшее время для пробежки! 🏃', enabled: true },
   { id: 2,              type: 'interval', intervalMinutes: 60, message: 'Три глотка воды',               enabled: true },
 ];
+
+const DEFAULT_SUBSCRIPTIONS = { version: 1, subscriptions: [], notificationState: {} };
 
 function loadJSON(file, fallback) {
   try {
@@ -78,9 +82,45 @@ function checkRemindersMain() {
   });
 }
 
+function loadSubscriptions() {
+  const loaded = loadJSON(subscriptionsFile(), DEFAULT_SUBSCRIPTIONS);
+  if (!loaded || !Array.isArray(loaded.subscriptions)) return { version: 1, subscriptions: [], notificationState: {} };
+  return {
+    version: 1,
+    subscriptions: loaded.subscriptions,
+    notificationState: loaded.notificationState && typeof loaded.notificationState === 'object' ? loaded.notificationState : {},
+  };
+}
+
+function localDateKey(date) {
+  const offset = date.getTimezoneOffset() * 60000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 10);
+}
+
+function checkSubscriptionReminders() {
+  const now = new Date();
+  if (now.getHours() !== 11 || now.getMinutes() !== 0) return;
+  const data = loadSubscriptions();
+  const today = localDateKey(now);
+  let changed = false;
+
+  data.subscriptions.forEach(subscription => {
+    const daysBefore = dueReminderDays(subscription, today);
+    if (daysBefore === null) return;
+    const key = reminderKey(subscription.id, subscription.nextPaymentDate, daysBefore);
+    if (data.notificationState[key]) return;
+    data.notificationState[key] = true;
+    changed = true;
+    fireMain(`Подписка ${subscription.serviceName} (${subscription.accountLabel}): оплата ${subscription.nextPaymentDate}, через ${daysBefore} дн.`);
+  });
+
+  if (changed) saveJSON(subscriptionsFile(), data);
+}
+
 let mainWindow = null;
 let settingsWindow = null;
 let assistantWindow = null;
+let subscriptionsWindow = null;
 let updatesWindow = null;
 let statsWindow = null;
 let downloadedUpdate = null;
@@ -260,6 +300,37 @@ function openSettings() {
   settingsWindow.on('closed', () => { settingsWindow = null; });
 }
 
+function openSubscriptions() {
+  if (subscriptionsWindow) { subscriptionsWindow.focus(); return; }
+  subscriptionsWindow = new BrowserWindow({
+    width: 680,
+    height: 760,
+    minWidth: 560,
+    minHeight: 580,
+    title: 'Kairos — Подписки',
+    resizable: true,
+    backgroundColor: '#0e0e1a',
+    webPreferences: { nodeIntegration: true, contextIsolation: false },
+  });
+  subscriptionsWindow.menuBarVisible = false;
+  subscriptionsWindow.webContents.on('context-menu', (_event, params) => {
+    if (!params.isEditable) return;
+    Menu.buildFromTemplate([
+      { label: 'Отменить', role: 'undo' },
+      { label: 'Повторить', role: 'redo' },
+      { type: 'separator' },
+      { label: 'Вырезать', role: 'cut' },
+      { label: 'Копировать', role: 'copy' },
+      { label: 'Вставить', role: 'paste' },
+      { label: 'Удалить', role: 'delete' },
+      { type: 'separator' },
+      { label: 'Выделить всё', role: 'selectAll' },
+    ]).popup({ window: subscriptionsWindow });
+  });
+  subscriptionsWindow.loadFile(path.join(__dirname, 'subscriptions', 'subscriptions.html'));
+  subscriptionsWindow.on('closed', () => { subscriptionsWindow = null; });
+}
+
 function openAssistant() {
   if (assistantWindow) { assistantWindow.focus(); return; }
   assistantWindow = new BrowserWindow({
@@ -318,6 +389,7 @@ if (!gotLock) {
   app.whenReady().then(() => {
     createMainWindow();
     setInterval(checkRemindersMain, 20000);
+    setInterval(checkSubscriptionReminders, 20000);
     configureUpdater();
     setTimeout(maybeShowReleaseNotes, 1200);
     setTimeout(sendInstallationTelemetry, 5000);
@@ -349,6 +421,20 @@ ipcMain.on('save-reminders', (_, reminders) => {
   if (mainWindow) mainWindow.webContents.send('reminders-updated');
 });
 
+ipcMain.on('get-subscriptions', (event) => {
+  event.returnValue = loadSubscriptions();
+});
+
+ipcMain.on('save-subscriptions', (_, nextData) => {
+  if (!nextData || !Array.isArray(nextData.subscriptions)) return;
+  const previous = loadSubscriptions();
+  saveJSON(subscriptionsFile(), {
+    version: 1,
+    subscriptions: nextData.subscriptions,
+    notificationState: previous.notificationState,
+  });
+});
+
 ipcMain.on('get-reminder-state', (event) => { event.returnValue = reminderState; });
 
 ipcMain.on('set-ignore-mouse', (_, ignore) => {
@@ -376,6 +462,7 @@ ipcMain.on('show-context-menu', (event) => {
   const config = getAssistantConfig();
   const menu = Menu.buildFromTemplate([
     { label: 'Переводчик и IT-помощник', click: openAssistant },
+    { label: 'Подписки', click: openSubscriptions },
     { label: 'Настройки напоминаний', click: openSettings },
     ...(config.ownerToken ? [{ label: 'Статистика установок', click: openStatsWindow }] : []),
     { type: 'separator' },

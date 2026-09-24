@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kairos — Подписки</title>
+  <link rel="stylesheet" href="subscriptions.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">KAIROS</p>
+        <h1>Подписки</h1>
+        <p class="subtitle">Оплаты, аккаунты и ближайшие продления</p>
+      </div>
+      <div class="actions">
+        <button id="pasteAccount" class="button secondary">Вставить аккаунт</button>
+        <button id="addSubscription" class="button primary">+ Подписка</button>
+      </div>
+    </header>
+
+    <p id="status" class="status" aria-live="polite"></p>
+
+    <section id="currentSubscription" class="current" hidden aria-labelledby="currentHeading">
+      <div class="section-heading">
+        <h2 id="currentHeading">Текущая подписка</h2>
+        <button id="closeCurrent" class="icon-button" title="Скрыть">×</button>
+      </div>
+      <div id="currentCard"></div>
+    </section>
+
+    <section id="subscriptionForm" class="panel" hidden aria-labelledby="formHeading">
+      <div class="section-heading"><h2 id="formHeading">Новая подписка</h2><button id="closeSubscriptionForm" class="icon-button" title="Закрыть">×</button></div>
+      <form id="subscriptionEditor">
+        <input id="editId" type="hidden">
+        <label>Сервис<input id="serviceName" required maxlength="80" placeholder="ChatGPT Plus"></label>
+        <label>Аккаунт<input id="accountLabel" required maxlength="120" placeholder="email, логин или метка"></label>
+        <div class="grid two"><label>Сумма <span>(необязательно)</span><input id="amount" inputmode="decimal" maxlength="20" placeholder="20"></label><label>Валюта <span>(необязательно)</span><input id="currency" maxlength="12" placeholder="USD"></label></div>
+        <label>Следующий платёж<input id="nextPaymentDate" type="date" required></label>
+        <div class="form-actions"><button type="submit" class="button primary">Сохранить</button></div>
+      </form>
+    </section>
+
+    <section id="paymentForm" class="panel" hidden aria-labelledby="paymentHeading">
+      <div class="section-heading"><h2 id="paymentHeading">Отметить оплаченной</h2><button data-close-panel="paymentForm" class="icon-button" title="Закрыть">×</button></div>
+      <form id="paymentEditor">
+        <label>Дата оплаты<input id="paidAt" type="date" required></label>
+        <label>Способ оплаты<input id="paymentMethod" required maxlength="80" placeholder="Карта •• 1234"></label>
+        <label>Оплаченный период<select id="paymentPeriod"><option value="month">Один месяц</option><option value="year">Один год</option><option value="custom">До выбранной даты</option></select></label>
+        <label id="paidThroughRow" hidden>Доступ оплачен до<input id="paidThrough" type="date"></label>
+        <div class="form-actions"><button type="submit" class="button primary">Подтвердить оплату</button></div>
+      </form>
+    </section>
+
+    <section id="giftForm" class="panel" hidden aria-labelledby="giftHeading">
+      <div class="section-heading"><h2 id="giftHeading">Подарочный период</h2><button data-close-panel="giftForm" class="icon-button" title="Закрыть">×</button></div>
+      <form id="giftEditor">
+        <label>Доступ продлён до<input id="giftUntil" type="date" required></label>
+        <p class="hint">Последняя оплата и карта останутся без изменений.</p>
+        <div class="form-actions"><button type="submit" class="button primary">Добавить период</button></div>
+      </form>
+    </section>
+
+    <section aria-labelledby="listHeading">
+      <div class="section-heading"><h2 id="listHeading">Ближайшие платежи</h2><span id="count" class="count"></span></div>
+      <div id="emptyState" class="empty" hidden>Добавьте первую подписку или скопируйте email/логин из браузера либо приложения и нажмите «Вставить аккаунт».</div>
+      <div id="subscriptionList" class="list"></div>
+    </section>
+  </main>
+  <script src="subscriptions.js"></script>
+</body>
+</html>
