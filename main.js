@@ -6,7 +6,8 @@ const crypto = require('crypto');
 const { execFile } = require('child_process');
 const { shouldShowReleaseNotes, isLegacyKairosElectronEntry } = require('./lib/update-policy');
 const { dueReminderDays, reminderKey } = require('./lib/subscriptions');
-const { getServerMonitorStatus, isWeecereServerUrl, parseWeecerePaymentDate } = require('./lib/server-monitor');
+const { getServerMonitorStatus, isWeecereServerUrl } = require('./lib/server-monitor');
+const { readWeecerePaymentDate, waitForWeecerePaymentDate } = require('./lib/weecere-page');
 
 const DEFAULT_ASSISTANT_API_URL = 'https://kairos-ai.kairos-stats-17184.workers.dev';
 
@@ -167,6 +168,7 @@ function loadWeecerePage(window, url) {
 }
 
 async function refreshWeecereMonitor() {
+  if (weecereLoginWindow && !weecereLoginWindow.isDestroyed()) return;
   const subscription = trackedWeecereSubscription();
   if (!subscription || !isWeecereServerUrl(subscription.monitor.url)) return publishServerMonitor();
 
@@ -181,8 +183,7 @@ async function refreshWeecereMonitor() {
     if (loadedUrl.hostname !== 'weecere.com' || loadedUrl.pathname.startsWith('/login')) {
       const error = new Error('auth-required'); error.code = 'auth-required'; throw error;
     }
-    const text = await reader.webContents.executeJavaScript('document.body ? document.body.innerText : ""');
-    const dueDate = parseWeecerePaymentDate(text);
+    const dueDate = await waitForWeecerePaymentDate(reader.webContents);
     if (!dueDate) {
       const error = new Error('parse-failed'); error.code = 'parse-failed'; throw error;
     }
@@ -427,11 +428,37 @@ function openWeecereLogin() {
     title: 'Kairos — Вход в Weecere',
     webPreferences: { partition: 'persist:weecere', nodeIntegration: false, contextIsolation: true, sandbox: true },
   });
-  weecereLoginWindow.menuBarVisible = false;
-  weecereLoginWindow.loadURL(subscription.monitor.url);
-  weecereLoginWindow.on('closed', () => {
+  const loginWindow = weecereLoginWindow;
+  loginWindow.menuBarVisible = false;
+  let checking = false;
+  let verifiedFromVisiblePage = false;
+  const checkVisiblePage = async () => {
+    if (checking || loginWindow.isDestroyed()) return;
+    checking = true;
+    try {
+      const dueDate = await readWeecerePaymentDate(loginWindow.webContents);
+      if (!dueDate || loginWindow.isDestroyed()) return;
+      verifiedFromVisiblePage = true;
+      const current = trackedWeecereSubscription();
+      if (current?.id === subscription.id && current.nextPaymentDate === dueDate && current.monitor.status === 'ok') return;
+      updateTrackedWeecereSubscription(subscription.id, current => ({
+        ...current,
+        nextPaymentDate: dueDate,
+        accessUntil: dueDate,
+        monitor: { ...current.monitor, status: 'ok', lastCheckedAt: new Date().toISOString() },
+      }));
+    } catch (_) {
+      // The browser may be navigating between login and the server page.
+    } finally {
+      checking = false;
+    }
+  };
+  const visibleCheckTimer = setInterval(checkVisiblePage, 1500);
+  loginWindow.loadURL(subscription.monitor.url);
+  loginWindow.on('closed', () => {
+    clearInterval(visibleCheckTimer);
     weecereLoginWindow = null;
-    refreshWeecereMonitor();
+    if (!verifiedFromVisiblePage) refreshWeecereMonitor();
   });
 }
 function openAssistant() {
