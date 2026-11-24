@@ -7,6 +7,8 @@ const {
   getTextScale,
   shouldShowReleaseNotes,
   isLegacyKairosElectronEntry,
+  isDuplicateKairosStartupEntry,
+  shouldAutoInstallUpdate,
 } = require('../lib/update-policy');
 
 test('scales widget text from canvas size with readable limits', () => {
@@ -27,6 +29,21 @@ test('recognizes only legacy Electron startup commands tied to Kairos', () => {
   assert.equal(isLegacyKairosElectronEntry('Electron', 'C:\\other-app\\electron.exe .'), false);
   assert.equal(isLegacyKairosElectronEntry('Kairos', 'C:\\Program Files\\Kairos\\Kairos.exe'), false);
   assert.equal(isLegacyKairosElectronEntry('Slack', 'C:\\Slack\\slack.exe'), false);
+  assert.equal(isLegacyKairosElectronEntry('electron.app.Electron', 'D:\\AI\\VS Code\\Local\\projects\\kairos\\node_modules\\electron\\dist\\electron.exe'), true);
+});
+
+test('removes only duplicate installed Kairos startup commands', () => {
+  const exe = 'C:\\Users\\Lenovo\\AppData\\Local\\Programs\\kairos\\Kairos.exe';
+  assert.equal(isDuplicateKairosStartupEntry('Kairos', `"${exe}" --autostart`, exe), true);
+  assert.equal(isDuplicateKairosStartupEntry('Kairos', `    Kairos    REG_SZ    "${exe}" --autostart`, exe), true);
+  assert.equal(isDuplicateKairosStartupEntry('com.kairos.widget', `"${exe}" --autostart`, exe), false);
+  assert.equal(isDuplicateKairosStartupEntry('Kairos', 'C:\\Other\\Kairos.exe --autostart', exe), false);
+});
+
+test('installs downloaded updates automatically only on idle autostart', () => {
+  assert.equal(shouldAutoInstallUpdate(true, false), true);
+  assert.equal(shouldAutoInstallUpdate(true, true), false);
+  assert.equal(shouldAutoInstallUpdate(false, false), false);
 });
 
 test('ships accessible release notes with the five requests per day notice', () => {

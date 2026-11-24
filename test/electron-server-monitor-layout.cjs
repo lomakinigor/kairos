@@ -19,6 +19,7 @@ app.whenReady().then(async () => {
   const sizes = await window.webContents.executeJavaScript('(' + (() => {
     const widget = document.querySelector('#widget');
     const row = document.querySelector('#server-monitor');
+    const light = document.querySelector('.server-monitor-light');
     const label = document.querySelector('#server-monitor-label');
     const dials = [...document.querySelectorAll('canvas')];
     return [50, 120, 260].map(size => {
@@ -26,11 +27,15 @@ app.whenReady().then(async () => {
       row.hidden = true;
       const baseWidth = widget.offsetWidth;
       row.hidden = false;
+      row.className = 'server-monitor gray';
+      const grayLightWidth = light.getBoundingClientRect().width;
+      row.className = 'server-monitor green';
+      const greenLightWidth = light.getBoundingClientRect().width;
       label.textContent = 'Сервер US · не удалось проверить оплату';
       const normalWidth = widget.offsetWidth;
       label.textContent = 'Очень длинное название сервера '.repeat(20);
       return {
-        size, baseWidth, normalWidth,
+        size, baseWidth, normalWidth, grayLightWidth, greenLightWidth,
         longWidth: widget.offsetWidth,
         belowDials: row.getBoundingClientRect().top >= dials[0].getBoundingClientRect().bottom,
         textClipped: label.scrollWidth > label.clientWidth && getComputedStyle(label).textOverflow === 'ellipsis',
@@ -39,8 +44,9 @@ app.whenReady().then(async () => {
   }).toString() + ')()');
 
   for (const result of sizes) {
-    const { size, baseWidth, normalWidth, longWidth, belowDials, textClipped } = result;
+    const { size, baseWidth, normalWidth, longWidth, belowDials, textClipped, grayLightWidth, greenLightWidth } = result;
     assert.equal(normalWidth, baseWidth, JSON.stringify(result));
+    assert.ok(Math.abs(greenLightWidth / grayLightWidth - 2.5) < 0.01, JSON.stringify(result));
     assert.equal(longWidth, baseWidth, 'Long label expanded widget at canvas size ' + size);
     assert.ok(belowDials && textClipped, JSON.stringify(result));
   }

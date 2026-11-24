@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const { execFile } = require('child_process');
-const { shouldShowReleaseNotes, isLegacyKairosElectronEntry } = require('./lib/update-policy');
+const { shouldShowReleaseNotes, isLegacyKairosElectronEntry, isDuplicateKairosStartupEntry, shouldAutoInstallUpdate } = require('./lib/update-policy');
 const { dueReminderDays, reminderKey } = require('./lib/subscriptions');
 const { getServerMonitorStatus, isWeecereServerUrl } = require('./lib/server-monitor');
 const { readWeecerePaymentDate, waitForWeecerePaymentDate } = require('./lib/weecere-page');
@@ -348,12 +348,14 @@ async function sendInstallationTelemetry() {
 }
 
 function cleanupLegacyElectronAutostart() {
-  if (process.platform !== 'win32') return;
+  if (process.platform !== 'win32' || !app.isPackaged) return;
   const runKey = 'HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run';
-  execFile('reg.exe', ['query', runKey, '/v', 'Electron'], { windowsHide: true }, (error, stdout) => {
-    if (error || !isLegacyKairosElectronEntry('Electron', stdout)) return;
-    execFile('reg.exe', ['delete', runKey, '/v', 'Electron', '/f'], { windowsHide: true }, () => {});
-  });
+  for (const name of ['Electron', 'electron.app.Electron', 'Kairos']) {
+    execFile('reg.exe', ['query', runKey, '/v', name], { windowsHide: true }, (error, stdout) => {
+      if (error || !(isLegacyKairosElectronEntry(name, stdout) || isDuplicateKairosStartupEntry(name, stdout, process.execPath))) return;
+      execFile('reg.exe', ['delete', runKey, '/v', name, '/f'], { windowsHide: true }, () => {});
+    });
+  }
 }
 
 function configureUpdater() {
@@ -362,6 +364,12 @@ function configureUpdater() {
   autoUpdater.autoInstallOnAppQuit = true;
   autoUpdater.on('update-downloaded', info => {
     downloadedUpdate = info;
+    const workWindowOpen = [settingsWindow, assistantWindow, subscriptionsWindow, statsWindow]
+      .some(window => window && !window.isDestroyed());
+    if (shouldAutoInstallUpdate(process.argv.includes('--autostart'), workWindowOpen)) {
+      autoUpdater.quitAndInstall(false, true);
+      return;
+    }
     openUpdatesWindow('ready', info);
   });
   setTimeout(() => autoUpdater.checkForUpdates().catch(() => {}), 30000);
