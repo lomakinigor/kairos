@@ -70,8 +70,8 @@ body {
 }
 
 #widget {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(2, max-content);
   position: relative;
   gap: 6px;
   padding: 10px 10px 8px;
@@ -84,7 +84,9 @@ body {
 }
 
 .server-monitor {
-  width: 100%;
+  grid-column: 1 / -1;
+  min-width: 0;
+  contain: inline-size;
   display: flex;
   align-items: center;
   gap: calc(6px * var(--widget-scale));
@@ -101,6 +103,12 @@ body {
 
 .server-monitor[hidden] { display: none; }
 .server-monitor:hover { background: rgba(255, 255, 255, 0.11); }
+#server-monitor-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .server-monitor-light { width: calc(8px * var(--widget-scale)); height: calc(8px * var(--widget-scale)); border-radius: 50%; flex: 0 0 auto; background: #8b95a7; box-shadow: 0 0 8px currentColor; }
 .server-monitor.green .server-monitor-light { background: #36d68a; color: #36d68a; }
 .server-monitor.yellow .server-monitor-light { background: #f4cb4f; color: #f4cb4f; }
