@@ -37,11 +37,13 @@ test('widget and main process expose the Weecere monitor workflow', () => {
   const root = path.join(__dirname, '..');
   const html = fs.readFileSync(path.join(root, 'renderer', 'index.html'), 'utf8');
   const app = fs.readFileSync(path.join(root, 'renderer', 'app.js'), 'utf8');
+  const css = fs.readFileSync(path.join(root, 'renderer', 'style.css'), 'utf8');
   const main = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
   const subscriptionsHtml = fs.readFileSync(path.join(root, 'subscriptions', 'subscriptions.html'), 'utf8');
   const subscriptionsApp = fs.readFileSync(path.join(root, 'subscriptions', 'subscriptions.js'), 'utf8');
 
   assert.match(html, /id="server-monitor"/);
+  assert.match(css, /\.server-monitor\[hidden\]\s*\{\s*display:\s*none/);
   assert.match(app, /server-monitor-updated/);
   assert.match(main, /function refreshWeecereMonitor/);
   assert.match(main, /persist:weecere/);
