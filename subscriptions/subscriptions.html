@@ -38,6 +38,8 @@
         <label>Аккаунт<input id="accountLabel" required maxlength="120" placeholder="email, логин или метка"></label>
         <div class="grid two"><label>Сумма <span>(необязательно)</span><input id="amount" inputmode="decimal" maxlength="20" placeholder="20"></label><label>Валюта <span>(необязательно)</span><input id="currency" maxlength="12" placeholder="USD"></label></div>
         <label>Следующий платёж<input id="nextPaymentDate" type="date" required></label>
+        <label>Страница сервера Weecere <span>(необязательно)</span><input id="monitorUrl" type="url" maxlength="300" placeholder="https://weecere.com/account/vds/.../info"></label>
+        <label><input id="monitorEnabled" type="checkbox"> Показывать статус оплаты сервера в виджете</label>
         <div class="form-actions"><button type="submit" class="button primary">Сохранить</button></div>
       </form>
     </section>

@@ -5,6 +5,7 @@ const {
   applyGiftPeriod,
   sortSubscriptionsByNextPayment,
 } = require('../lib/subscriptions');
+const { isWeecereServerUrl } = require('../lib/server-monitor');
 
 let store = ipcRenderer.sendSync('get-subscriptions');
 let paymentTargetId = null;
@@ -62,15 +63,17 @@ function card(subscription) {
   if (subscription.amount || subscription.currency) node.append(copyRow('Сумма', [subscription.amount, subscription.currency].filter(Boolean).join(' ')));
   node.append(copyRow('Последняя карта', subscription.lastPayment?.paymentMethod || 'ещё не отмечена'));
   node.append(copyRow('Следующий платёж', subscription.nextPaymentDate || '—'));
+  if (subscription.monitor?.enabled) node.append(textElement('div', 'Статус сервера показан в виджете', 'hint'));
   if (subscription.lastPayment?.paidAt) node.append(textElement('div', `Последняя оплата: ${subscription.lastPayment.paidAt} · доступ до ${subscription.lastPayment.paidThrough}`, 'hint'));
   const actions = document.createElement('div'); actions.className = 'card-actions';
   const edit = textElement('button', 'Изменить', 'button secondary small'); edit.type = 'button'; edit.onclick = () => openEditor(subscription);
   const pay = textElement('button', 'Оплачено', 'button primary small'); pay.type = 'button'; pay.onclick = () => openPayment(subscription);
   const gift = textElement('button', 'Подарочный период', 'button secondary small'); gift.type = 'button'; gift.onclick = () => openGift(subscription);
+  const login = textElement('button', 'Войти в Weecere', 'button secondary small'); login.type = 'button'; login.hidden = !subscription.monitor?.enabled; login.onclick = () => ipcRenderer.send('open-weecere-login');
   const toggle = textElement('button', subscription.status === 'cancelled' ? 'Возобновить' : 'Отменить', 'button secondary small danger'); toggle.type = 'button'; toggle.onclick = () => {
     subscription.status = subscription.status === 'cancelled' ? 'active' : 'cancelled'; save(); render();
   };
-  actions.append(edit, pay, gift, toggle); node.append(actions);
+  actions.append(edit, pay, gift, login, toggle); node.append(actions);
   return node;
 }
 function renderCurrent(subscription) {
@@ -93,6 +96,7 @@ function openEditor(subscription = null, account = '') {
     $('formHeading').textContent = 'Изменить подписку';
     $('editId').value = subscription.id; $('serviceName').value = subscription.serviceName; $('accountLabel').value = subscription.accountLabel;
     $('amount').value = subscription.amount || ''; $('currency').value = subscription.currency || ''; $('nextPaymentDate').value = subscription.nextPaymentDate || localDate();
+    $('monitorUrl').value = subscription.monitor?.url || ''; $('monitorEnabled').checked = Boolean(subscription.monitor?.enabled);
   } else $('accountLabel').value = account;
   $('subscriptionForm').hidden = false; $('serviceName').focus();
 }
@@ -118,9 +122,14 @@ $('paymentPeriod').addEventListener('change', () => { $('paidThroughRow').hidden
 $('subscriptionEditor').addEventListener('submit', event => {
   event.preventDefault();
   const id = $('editId').value || crypto.randomUUID();
-  const record = { id, serviceName: $('serviceName').value.trim(), accountLabel: $('accountLabel').value.trim(), amount: $('amount').value.trim(), currency: $('currency').value.trim(), nextPaymentDate: $('nextPaymentDate').value, accessUntil: $('nextPaymentDate').value, status: 'active', remindersEnabled: true };
+  const monitorUrl = $('monitorUrl').value.trim();
+  const monitorEnabled = $('monitorEnabled').checked;
+  if (monitorEnabled && !isWeecereServerUrl(monitorUrl)) { setStatus('Укажите ссылку на страницу сервера Weecere.'); return; }
+  const previous = store.subscriptions.find(item => item.id === id);
+  const record = { id, serviceName: $('serviceName').value.trim(), accountLabel: $('accountLabel').value.trim(), amount: $('amount').value.trim(), currency: $('currency').value.trim(), nextPaymentDate: $('nextPaymentDate').value, accessUntil: $('nextPaymentDate').value, status: 'active', remindersEnabled: true, monitor: { provider: 'weecere', url: monitorUrl, enabled: monitorEnabled, status: previous?.monitor?.status || 'auth-required', lastCheckedAt: previous?.monitor?.lastCheckedAt || null } };
   const index = store.subscriptions.findIndex(item => item.id === id);
   if (index >= 0) store.subscriptions[index] = { ...store.subscriptions[index], ...record }; else store.subscriptions.push(record);
+  if (monitorEnabled) store.subscriptions.forEach(item => { if (item.id !== id && item.monitor?.enabled) item.monitor.enabled = false; });
   save(); render(); $('subscriptionForm').hidden = true; setStatus('Подписка сохранена.');
 });
 $('paymentEditor').addEventListener('submit', event => {
@@ -132,3 +141,4 @@ $('giftEditor').addEventListener('submit', event => {
   try { store.subscriptions[index] = applyGiftPeriod(store.subscriptions[index], $('giftUntil').value); save(); render(); renderCurrent(store.subscriptions[index]); $('giftForm').hidden = true; setStatus('Подарочный период добавлен.'); } catch (error) { setStatus(error.message); }
 });
 render();
+ipcRenderer.on('subscriptions-updated', (_, nextStore) => { store = nextStore; render(); });

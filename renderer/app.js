@@ -20,6 +20,22 @@ const timerCtx      = document.getElementById('timerCanvas').getContext('2d');
 const widget        = document.getElementById('widget');
 const modeLabel     = document.getElementById('modeLabel');
 const notifContainer = document.getElementById('notif-container');
+const serverMonitor = document.getElementById('server-monitor');
+const serverMonitorLabel = document.getElementById('server-monitor-label');
+
+function renderServerMonitor(monitor) {
+  serverMonitor.hidden = !monitor || monitor.tone === 'hidden';
+  if (serverMonitor.hidden) return;
+  serverMonitor.className = `server-monitor ${monitor.tone}${monitor.blink ? ' blink' : ''}`;
+  serverMonitorLabel.textContent = monitor.label;
+}
+
+serverMonitor.addEventListener('click', event => {
+  event.stopPropagation();
+  ipcRenderer.send('open-server-monitor');
+});
+
+ipcRenderer.on('server-monitor-updated', (_, monitor) => renderServerMonitor(monitor));
 
 // === Notification panels ===
 let _notifId = 0;
@@ -291,6 +307,7 @@ let dragging = false, dragX = 0, dragY = 0;
 
 document.addEventListener('mousedown', e => {
   if (e.button !== 0) return;
+  if (e.target.closest('#server-monitor')) return;
   if (e.target.closest('.notif-panel')) return;
   dragging = true;
   dragX = e.screenX;
@@ -331,4 +348,5 @@ document.addEventListener('contextmenu', e => {
 // === Init ===
 canvasSize = ipcRenderer.sendSync('get-canvas-size');
 resizeCanvases(canvasSize);
+renderServerMonitor(ipcRenderer.sendSync('get-server-monitor'));
 requestAnimationFrame(frame);

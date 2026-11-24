@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Menu, Notification } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, Notification, shell } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const fs = require('fs');
@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const { execFile } = require('child_process');
 const { shouldShowReleaseNotes, isLegacyKairosElectronEntry } = require('./lib/update-policy');
 const { dueReminderDays, reminderKey } = require('./lib/subscriptions');
+const { getServerMonitorStatus, isWeecereServerUrl, parseWeecerePaymentDate } = require('./lib/server-monitor');
 
 const DEFAULT_ASSISTANT_API_URL = 'https://kairos-ai.kairos-stats-17184.workers.dev';
 
@@ -117,12 +118,97 @@ function checkSubscriptionReminders() {
   if (changed) saveJSON(subscriptionsFile(), data);
 }
 
+function trackedWeecereSubscription(data = loadSubscriptions()) {
+  return data.subscriptions.find(subscription => subscription.monitor?.enabled && subscription.monitor.provider === 'weecere') || null;
+}
+
+function monitorLabel(subscription, status) {
+  const name = subscription.serviceName || 'VDS Weecere';
+  if (status.tone === 'gray') {
+    return `${name} · ${subscription.monitor?.status === 'auth-required' ? 'нужно войти в Weecere' : 'не удалось проверить оплату'}`;
+  }
+  const [year, month, day] = subscription.nextPaymentDate.split('-');
+  return `${name} · оплачено до ${day}.${month}.${year}`;
+}
+
+function getServerMonitorPayload() {
+  const subscription = trackedWeecereSubscription();
+  const status = getServerMonitorStatus(subscription, localDateKey(new Date()));
+  if (status.tone === 'hidden') return status;
+  return { ...status, label: monitorLabel(subscription, status) };
+}
+
+function publishServerMonitor() {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('server-monitor-updated', getServerMonitorPayload());
+}
+
+function updateTrackedWeecereSubscription(subscriptionId, updater) {
+  const data = loadSubscriptions();
+  const index = data.subscriptions.findIndex(subscription => subscription.id === subscriptionId);
+  if (index < 0) return;
+  data.subscriptions[index] = updater(data.subscriptions[index]);
+  saveJSON(subscriptionsFile(), data);
+  if (subscriptionsWindow && !subscriptionsWindow.isDestroyed()) subscriptionsWindow.webContents.send('subscriptions-updated', data);
+  publishServerMonitor();
+}
+
+function loadWeecerePage(window, url) {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error('timeout')), 15000);
+    const finish = () => { clearTimeout(timeout); resolve(); };
+    window.webContents.once('did-finish-load', finish);
+    window.webContents.once('did-fail-load', (_event, _code, _description, _url, isMainFrame) => {
+      if (!isMainFrame) return;
+      clearTimeout(timeout);
+      reject(new Error('network'));
+    });
+    window.loadURL(url).catch(reject);
+  });
+}
+
+async function refreshWeecereMonitor() {
+  const subscription = trackedWeecereSubscription();
+  if (!subscription || !isWeecereServerUrl(subscription.monitor.url)) return publishServerMonitor();
+
+  const reader = new BrowserWindow({
+    show: false,
+    webPreferences: { partition: 'persist:weecere', nodeIntegration: false, contextIsolation: true, sandbox: true },
+  });
+
+  try {
+    await loadWeecerePage(reader, subscription.monitor.url);
+    const loadedUrl = new URL(reader.webContents.getURL());
+    if (loadedUrl.hostname !== 'weecere.com' || loadedUrl.pathname.startsWith('/login')) {
+      const error = new Error('auth-required'); error.code = 'auth-required'; throw error;
+    }
+    const text = await reader.webContents.executeJavaScript('document.body ? document.body.innerText : ""');
+    const dueDate = parseWeecerePaymentDate(text);
+    if (!dueDate) {
+      const error = new Error('parse-failed'); error.code = 'parse-failed'; throw error;
+    }
+    updateTrackedWeecereSubscription(subscription.id, current => ({
+      ...current,
+      nextPaymentDate: dueDate,
+      accessUntil: dueDate,
+      monitor: { ...current.monitor, status: 'ok', lastCheckedAt: new Date().toISOString() },
+    }));
+  } catch (error) {
+    updateTrackedWeecereSubscription(subscription.id, current => ({
+      ...current,
+      monitor: { ...current.monitor, status: error.code === 'auth-required' ? 'auth-required' : 'check-failed', lastCheckedAt: new Date().toISOString() },
+    }));
+  } finally {
+    if (!reader.isDestroyed()) reader.destroy();
+  }
+}
+
 let mainWindow = null;
 let settingsWindow = null;
 let assistantWindow = null;
 let subscriptionsWindow = null;
 let updatesWindow = null;
 let statsWindow = null;
+let weecereLoginWindow = null;
 let downloadedUpdate = null;
 let currentCanvasSize = 120;
 let _resizeGuard = false;
@@ -331,6 +417,23 @@ function openSubscriptions() {
   subscriptionsWindow.on('closed', () => { subscriptionsWindow = null; });
 }
 
+function openWeecereLogin() {
+  const subscription = trackedWeecereSubscription();
+  if (!subscription || !isWeecereServerUrl(subscription.monitor.url)) return;
+  if (weecereLoginWindow) { weecereLoginWindow.focus(); return; }
+  weecereLoginWindow = new BrowserWindow({
+    width: 980,
+    height: 760,
+    title: 'Kairos — Вход в Weecere',
+    webPreferences: { partition: 'persist:weecere', nodeIntegration: false, contextIsolation: true, sandbox: true },
+  });
+  weecereLoginWindow.menuBarVisible = false;
+  weecereLoginWindow.loadURL(subscription.monitor.url);
+  weecereLoginWindow.on('closed', () => {
+    weecereLoginWindow = null;
+    refreshWeecereMonitor();
+  });
+}
 function openAssistant() {
   if (assistantWindow) { assistantWindow.focus(); return; }
   assistantWindow = new BrowserWindow({
@@ -390,6 +493,8 @@ if (!gotLock) {
     createMainWindow();
     setInterval(checkRemindersMain, 20000);
     setInterval(checkSubscriptionReminders, 20000);
+    setTimeout(refreshWeecereMonitor, 4000);
+    setInterval(refreshWeecereMonitor, 6 * 60 * 60 * 1000);
     configureUpdater();
     setTimeout(maybeShowReleaseNotes, 1200);
     setTimeout(sendInstallationTelemetry, 5000);
@@ -433,7 +538,14 @@ ipcMain.on('save-subscriptions', (_, nextData) => {
     subscriptions: nextData.subscriptions,
     notificationState: previous.notificationState,
   });
+  publishServerMonitor();
 });
+ipcMain.on('get-server-monitor', event => { event.returnValue = getServerMonitorPayload(); });
+ipcMain.on('open-server-monitor', () => {
+  const subscription = trackedWeecereSubscription();
+  if (subscription && isWeecereServerUrl(subscription.monitor.url)) shell.openExternal(subscription.monitor.url);
+});
+ipcMain.on('open-weecere-login', openWeecereLogin);
 
 ipcMain.on('get-reminder-state', (event) => { event.returnValue = reminderState; });
 
