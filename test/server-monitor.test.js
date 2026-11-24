@@ -31,6 +31,20 @@ test('accepts only the Weecere server page and parses labelled billing dates', (
   assert.equal(parseWeecerePaymentDate('Последний вход: 15.12.2026'), null);
 });
 
+test('reads the Russian date below the paid-through label on the Weecere server page', () => {
+  const page = 'ИНФОРМАЦИЯ\nстатус\nВключен\nоплачен до\n24 декабря 2026\nПродлить';
+  const date = parseWeecerePaymentDate(page);
+  assert.equal(date, '2026-12-24');
+  assert.equal(getServerMonitorStatus({ ...server, nextPaymentDate: date }, '2026-11-24').tone, 'green');
+  assert.equal(parseWeecerePaymentDate('оплачен до: 1\u00a0января\u00a02027'), '2027-01-01');
+});
+
+test('rejects invalid dates and dates belonging to the next field', () => {
+  assert.equal(parseWeecerePaymentDate('оплачен до\n31 февраля 2026'), null);
+  assert.equal(parseWeecerePaymentDate('оплачен до: 2026-02-31'), null);
+  assert.equal(parseWeecerePaymentDate('оплачен до\nПоследняя оплата: 24 декабря 2026'), null);
+});
+
 test('widget and main process expose the Weecere monitor workflow', () => {
   const fs = require('node:fs');
   const path = require('node:path');

@@ -1,6 +1,6 @@
 {
   "name": "kairos",
-  "version": "1.2.6",
+  "version": "1.2.7",
   "description": "Desktop clock widget — local time + 45-min work/break timer",
   "main": "main.js",
   "scripts": {
