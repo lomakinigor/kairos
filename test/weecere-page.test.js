@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { readWeecerePaymentDate, waitForWeecerePaymentDate } = require('../lib/weecere-page');
+const { EventEmitter } = require('node:events');
+const { loadWeecerePage, readWeecerePaymentDate, waitForWeecerePaymentDate } = require('../lib/weecere-page');
 
 const serverUrl = 'https://weecere.com/account/vds/125823/info';
 
@@ -33,4 +34,32 @@ test('waits for asynchronous payment data and stops on timeout', async () => {
 
   const empty = { getURL: () => serverUrl, executeJavaScript: async () => 'Загрузка' };
   assert.equal(await waitForWeecerePaymentDate(empty, 5, 1), null);
+});
+
+test('waits through an aborted intermediate navigation to the final page', async () => {
+  const webContents = new EventEmitter();
+  const window = {
+    webContents,
+    loadURL: () => {
+      setImmediate(() => {
+        webContents.emit('did-fail-load', {}, -3, 'ERR_ABORTED', serverUrl, true);
+        webContents.emit('did-finish-load');
+      });
+      return Promise.reject(new Error('ERR_ABORTED'));
+    },
+  };
+  await loadWeecerePage(window, serverUrl, 100);
+});
+
+test('rejects a real main-frame network failure and timeout', async () => {
+  const webContents = new EventEmitter();
+  const failed = {
+    webContents,
+    loadURL: () => {
+      setImmediate(() => webContents.emit('did-fail-load', {}, -105, 'ERR_NAME_NOT_RESOLVED', serverUrl, true));
+      return new Promise(() => {});
+    },
+  };
+  await assert.rejects(loadWeecerePage(failed, serverUrl, 100), { code: 'network' });
+  await assert.rejects(loadWeecerePage({ webContents: new EventEmitter(), loadURL: () => new Promise(() => {}) }, serverUrl, 5), { code: 'timeout' });
 });

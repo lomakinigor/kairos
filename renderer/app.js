@@ -28,6 +28,7 @@ function renderServerMonitor(monitor) {
   if (serverMonitor.hidden) return;
   serverMonitor.className = `server-monitor ${monitor.tone}${monitor.blink ? ' blink' : ''}`;
   serverMonitorLabel.textContent = monitor.label;
+  serverMonitor.title = monitor.label;
 }
 
 serverMonitor.addEventListener('click', event => {

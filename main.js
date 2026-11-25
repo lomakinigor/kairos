@@ -6,8 +6,8 @@ const crypto = require('crypto');
 const { execFile } = require('child_process');
 const { shouldShowReleaseNotes, isLegacyKairosElectronEntry, isDuplicateKairosStartupEntry, shouldAutoInstallUpdate } = require('./lib/update-policy');
 const { dueReminderDays, reminderKey } = require('./lib/subscriptions');
-const { getServerMonitorStatus, isWeecereServerUrl } = require('./lib/server-monitor');
-const { readWeecerePaymentDate, waitForWeecerePaymentDate } = require('./lib/weecere-page');
+const { getServerMonitorStatus, isWeecereServerUrl, classifyWeecereError } = require('./lib/server-monitor');
+const { loadWeecerePage, readWeecerePaymentDate, waitForWeecerePaymentDate } = require('./lib/weecere-page');
 
 const DEFAULT_ASSISTANT_API_URL = 'https://kairos-ai.kairos-stats-17184.workers.dev';
 
@@ -126,7 +126,14 @@ function trackedWeecereSubscription(data = loadSubscriptions()) {
 function monitorLabel(subscription, status) {
   const name = subscription.serviceName || 'VDS Weecere';
   if (status.tone === 'gray') {
-    return `${name} · ${subscription.monitor?.status === 'auth-required' ? 'нужно войти в Weecere' : 'не удалось проверить оплату'}`;
+    const reason = {
+      'auth-required': 'нужно войти в Weecere',
+      'parse-failed': 'дата оплаты не найдена на странице',
+      timeout: 'страница не загрузилась вовремя',
+      network: 'ошибка загрузки страницы',
+      unexpected: 'ошибка чтения страницы',
+    }[subscription.monitor?.lastErrorCode] || 'не удалось проверить оплату';
+    return `${name} · ${reason}`;
   }
   const [year, month, day] = subscription.nextPaymentDate.split('-');
   return `${name} · оплачено до ${day}.${month}.${year}`;
@@ -153,20 +160,6 @@ function updateTrackedWeecereSubscription(subscriptionId, updater) {
   publishServerMonitor();
 }
 
-function loadWeecerePage(window, url) {
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error('timeout')), 15000);
-    const finish = () => { clearTimeout(timeout); resolve(); };
-    window.webContents.once('did-finish-load', finish);
-    window.webContents.once('did-fail-load', (_event, _code, _description, _url, isMainFrame) => {
-      if (!isMainFrame) return;
-      clearTimeout(timeout);
-      reject(new Error('network'));
-    });
-    window.loadURL(url).catch(reject);
-  });
-}
-
 async function refreshWeecereMonitor() {
   if (weecereLoginWindow && !weecereLoginWindow.isDestroyed()) return;
   const subscription = trackedWeecereSubscription();
@@ -191,12 +184,12 @@ async function refreshWeecereMonitor() {
       ...current,
       nextPaymentDate: dueDate,
       accessUntil: dueDate,
-      monitor: { ...current.monitor, status: 'ok', lastCheckedAt: new Date().toISOString() },
+      monitor: { ...current.monitor, status: 'ok', lastErrorCode: null, lastCheckedAt: new Date().toISOString() },
     }));
   } catch (error) {
     updateTrackedWeecereSubscription(subscription.id, current => ({
       ...current,
-      monitor: { ...current.monitor, status: error.code === 'auth-required' ? 'auth-required' : 'check-failed', lastCheckedAt: new Date().toISOString() },
+      monitor: { ...current.monitor, status: error.code === 'auth-required' ? 'auth-required' : 'check-failed', lastErrorCode: classifyWeecereError(error), lastCheckedAt: new Date().toISOString() },
     }));
   } finally {
     if (!reader.isDestroyed()) reader.destroy();
@@ -453,7 +446,7 @@ function openWeecereLogin() {
         ...current,
         nextPaymentDate: dueDate,
         accessUntil: dueDate,
-        monitor: { ...current.monitor, status: 'ok', lastCheckedAt: new Date().toISOString() },
+        monitor: { ...current.monitor, status: 'ok', lastErrorCode: null, lastCheckedAt: new Date().toISOString() },
       }));
     } catch (_) {
       // The browser may be navigating between login and the server page.

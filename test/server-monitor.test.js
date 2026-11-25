@@ -5,6 +5,7 @@ const {
   getServerMonitorStatus,
   isWeecereServerUrl,
   parseWeecerePaymentDate,
+  classifyWeecereError,
 } = require('../lib/server-monitor');
 
 const server = { serviceName: 'VDS Weecere', monitor: { enabled: true, url: 'https://weecere.com/account/vds/125823/info' } };
@@ -39,10 +40,23 @@ test('reads the Russian date below the paid-through label on the Weecere server 
   assert.equal(parseWeecerePaymentDate('оплачен до: 1\u00a0января\u00a02027'), '2027-01-01');
 });
 
+test('reads paid-through date from the corresponding column of the Weecere info grid', () => {
+  assert.equal(parseWeecerePaymentDate('ИНФОРМАЦИЯ\nстатус\tоплачен до\nВключен\t24 декабря 2026\nПродлить'), '2026-12-24');
+  assert.equal(parseWeecerePaymentDate('статус\nоплачен до\nВключен\n24 декабря 2026'), '2026-12-24');
+  assert.equal(parseWeecerePaymentDate('статус\tоплачен до\n24 декабря 2026\tВключен'), null);
+});
+
 test('rejects invalid dates and dates belonging to the next field', () => {
   assert.equal(parseWeecerePaymentDate('оплачен до\n31 февраля 2026'), null);
   assert.equal(parseWeecerePaymentDate('оплачен до: 2026-02-31'), null);
   assert.equal(parseWeecerePaymentDate('оплачен до\nПоследняя оплата: 24 декабря 2026'), null);
+});
+
+test('stores only safe diagnostic categories after a failed page check', () => {
+  assert.equal(classifyWeecereError({ code: 'auth-required' }), 'auth-required');
+  assert.equal(classifyWeecereError({ code: 'parse-failed' }), 'parse-failed');
+  assert.equal(classifyWeecereError(new Error('timeout')), 'timeout');
+  assert.equal(classifyWeecereError({ message: 'secret session token' }), 'unexpected');
 });
 
 test('widget and main process expose the Weecere monitor workflow', () => {
