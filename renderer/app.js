@@ -21,13 +21,12 @@ const widget        = document.getElementById('widget');
 const modeLabel     = document.getElementById('modeLabel');
 const notifContainer = document.getElementById('notif-container');
 const serverMonitor = document.getElementById('server-monitor');
-const serverMonitorLabel = document.getElementById('server-monitor-label');
 
 function renderServerMonitor(monitor) {
   serverMonitor.hidden = !monitor || monitor.tone === 'hidden';
   if (serverMonitor.hidden) return;
   serverMonitor.className = `server-monitor ${monitor.tone}${monitor.blink ? ' blink' : ''}`;
-  serverMonitorLabel.textContent = monitor.label;
+  serverMonitor.setAttribute('aria-label', monitor.label);
   serverMonitor.title = monitor.label;
 }
 
